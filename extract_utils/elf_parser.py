@@ -187,13 +187,15 @@ class ELFError(Exception):
 
 
 class ELFFile:
-    def __init__(self, f: BufferedReader):
+    def __init__(self, f: BufferedReader, file_name: str):
+        print(f"Initializing ELFFile for {file_name}")
+        self.file_name = file_name
         self.mm = mmap(f.fileno(), 0, access=ACCESS_READ | MAP_PRIVATE)
 
         self.ident = Elf_Eident.from_buffer(self.mm)
 
         if self.ident.ei_mag != MAG:
-            raise ELFError('Invalid file')
+            raise ELFError(f"Invalid file: {file_name}")
 
         self.ehdr: Elf32_Ehdr | Elf64_Ehdr
         self.shdr_cls: type[Elf32_Shdr | Elf64_Shdr]
@@ -218,7 +220,12 @@ class ELFFile:
     def iter_sections(self, kind: Optional[SHT] = None):
         offset = self.ehdr.e_shoff
         for _ in range(self.ehdr.e_shnum):
-            shdr = self.shdr_cls.from_buffer(self.mm, offset)
+            try:
+                shdr = self.shdr_cls.from_buffer(self.mm, offset)
+            except Exception as e:
+                print(f"Error reading section header at offset {offset} for {self.file_name}")
+                print(f"Error: {str(e)}")
+                raise
             offset += self.ehdr.e_shentsize
 
             if kind is None or shdr.sh_type == kind:
@@ -299,3 +306,37 @@ class ELFFile:
             lib = self.mm[start:end]
             decoded_lib = lib.decode()
             yield decoded_lib
+
+
+def process_file(file_path):
+    try:
+        with open(file_path, "rb") as file:
+            elf = ELFFile(file, file_path)
+            print(f"Successfully processed {file_path}")
+    except Exception as e:
+        print(f"Error processing {file_path}: {str(e)}")
+
+
+def process_proprietary_files(file_list):
+    for file_path in file_list:
+        print(f"Processing file: {file_path}")
+        process_file(file_path)
+
+
+def load_file_paths(file_name):
+    file_paths = []
+    try:
+        with open(file_name, 'r') as f:
+            file_paths = [line.strip() for line in f.readlines() if line.strip()]
+    except Exception as e:
+        print(f"Error reading file list {file_name}: {str(e)}")
+    return file_paths
+
+
+if __name__ == "__main__":
+    file_list = load_file_paths("/home/chandu/waffle-los/device/oneplus/sm8650-common/proprietary-files.txt")
+    
+    if file_list:
+        process_proprietary_files(file_list)
+    else:
+        print("No files to process.")

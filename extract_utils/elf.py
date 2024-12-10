@@ -16,7 +16,7 @@ SO_SUFFIX_LEN = len(SO_SUFFIX)
 def file_needs_lib(file_path: str, needed_lib: str) -> bool:
     with suppress(ELFError):
         with open(file_path, 'rb') as f:
-            elf = ELFFile(f)
+            elf = ELFFile(f, file_path)
             libs = elf.get_libs()
             return any(lib == needed_lib for lib in libs)
 
@@ -41,7 +41,7 @@ def get_file_machine_bits_libs(
 ) -> Tuple[EM, int, Optional[List[str]]] | Tuple[None, None, None]:
     try:
         with open(file_path, 'rb') as f:
-            elf = ELFFile(f)
+            elf = ELFFile(f, file_path)
             machine = elf.machine
             bits = elf.bits
             libs = None
