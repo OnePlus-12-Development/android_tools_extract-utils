@@ -4,7 +4,6 @@
 #
 
 from __future__ import annotations
-
 import ctypes
 from enum import Enum
 from io import BufferedReader
@@ -190,7 +189,10 @@ class ELFFile:
     def __init__(self, f: BufferedReader, file_name: str):
         print(f"Initializing ELFFile for {file_name}")
         self.file_name = file_name
-        self.mm = mmap(f.fileno(), 0, access=ACCESS_READ | MAP_PRIVATE)
+        file_size = f.seek(0, 2)
+        f.seek(0)
+
+        self.mm = mmap(f.fileno(), file_size, access=ACCESS_READ | MAP_PRIVATE)
 
         self.ident = Elf_Eident.from_buffer(self.mm)
 
@@ -219,14 +221,20 @@ class ELFFile:
 
     def iter_sections(self, kind: Optional[SHT] = None):
         offset = self.ehdr.e_shoff
+        section_header_size = self.ehdr.e_shentsize
+
         for _ in range(self.ehdr.e_shnum):
+            if offset + section_header_size > len(self.mm):
+                raise ELFError(f"Section header offset {offset} exceeds file size.")
+
             try:
                 shdr = self.shdr_cls.from_buffer(self.mm, offset)
             except Exception as e:
                 print(f"Error reading section header at offset {offset} for {self.file_name}")
                 print(f"Error: {str(e)}")
                 raise
-            offset += self.ehdr.e_shentsize
+
+            offset += section_header_size
 
             if kind is None or shdr.sh_type == kind:
                 yield shdr
@@ -249,20 +257,20 @@ class ELFFile:
                 yield phdr
 
     def address_to_offset(self, start: int, size: int):
-        end = start + size
-        for phdr in self.iter_segments(kind=PT.LOAD):
-            if start < phdr.p_vaddr:
-                continue
 
-            if end > phdr.p_vaddr + phdr.p_filesz:
-                continue
+     end = start + size
 
-            offset = start - phdr.p_vaddr + phdr.p_offset
-            end = offset + phdr.p_filesz
-
-            return offset, end
-
-        return None, None
+     for phdr in self.iter_segments(kind=PT.LOAD):
+         if start < phdr.p_vaddr + phdr.p_memsz and end > phdr.p_vaddr:
+             if start < phdr.p_vaddr:
+                 offset = 0
+             else:
+                 offset = start - phdr.p_vaddr + phdr.p_offset
+             segment_end = phdr.p_vaddr + phdr.p_filesz
+             if end > segment_end:
+                 continue
+             return offset, min(end, segment_end)
+     raise ELFError(f"Address range {start} - {end} not found in any segment")
 
     def dynamic_section_strtab(self, shdr: Elf32_Shdr | Elf64_Shdr):
         strtab_addr = None
@@ -335,7 +343,7 @@ def load_file_paths(file_name):
 
 if __name__ == "__main__":
     file_list = load_file_paths("/home/chandu/waffle-los/device/oneplus/sm8650-common/proprietary-files.txt")
-    
+
     if file_list:
         process_proprietary_files(file_list)
     else:
