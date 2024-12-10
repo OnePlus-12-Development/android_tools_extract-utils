@@ -323,12 +323,12 @@ class blob_fixup:
         *args,
         **kwargs,
     ):
-        with open(file_path, 'r', newline='', encoding='utf-8') as f:
+        with open(file_path, 'r', newline='', encoding='utf-8', errors='ignore') as f:
             data = f.read()
 
         data = re.sub(pattern, replacement, data)
 
-        with open(file_path, 'w', newline='', encoding='utf-8') as f:
+        with open(file_path, 'w', newline='', encoding='utf-8', errors='ignore') as f:
             f.write(data)
 
     def regex_replace(self, search: str, replace: str) -> blob_fixup:

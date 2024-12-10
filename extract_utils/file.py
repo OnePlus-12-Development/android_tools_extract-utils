@@ -498,7 +498,7 @@ class FileList:
         if not self.__check_elf:
             return False
 
-        if ext == '.so':
+        if ext in ('.so', '.so.1'):
             if file.contains_path_parts(LIB_PARTS) or file.contains_path_parts(
                 LIB64_PARTS
             ):
